@@ -1,0 +1,60 @@
+import sys
+from PyQt5.QtWidgets import QApplication
+
+def main():
+    """
+    Punto de entrada principal de la aplicación.
+    Inicializa la aplicación PyQt5, el gestor de ventanas y ejecuta el evento principal.
+    """
+    # Inicializar la aplicación
+    app = QApplication(sys.argv)
+
+    # Crear y configurar el gestor de ventanas
+    gestor = GestorVentanas()
+    gestor.mostrar_bienvenida()
+
+    # Ejecutar el evento principal
+    sys.exit(app.exec_())
+
+from vista import VentanaBienvenida, VentanaLogin, VentanaRegistro, VistaECGAnomalias
+from controlador import ControladorECG
+
+class GestorVentanas:
+    def __init__(self):
+        # Importar las ventanas
+
+        self.controlador = ControladorECG()
+
+        # Crear las ventanas y pasar el gestor
+        self.ventana_bienvenida = VentanaBienvenida(self)
+        self.ventana_login = VentanaLogin(self)
+        self.ventana_registro = VentanaRegistro(self)
+        self.ventana_anomalias = VistaECGAnomalias()
+
+    def mostrar_bienvenida(self):
+        self.ocultar_todas()
+        self.ventana_bienvenida.show()
+
+    def mostrar_login(self):
+        self.ocultar_todas()
+        self.ventana_login.show()
+
+    def mostrar_registro(self):
+        self.ocultar_todas()
+        self.ventana_registro.show()
+
+    def mostrar_anomalias(self):
+        self.ocultar_todas()
+        self.ventana_anomalias.show()
+
+    def ocultar_todas(self):
+        self.ventana_bienvenida.hide()
+        self.ventana_login.hide()
+        self.ventana_registro.hide()
+        self.ventana_anomalias.hide()
+
+
+if __name__ == "__main__":
+    main()
+
+    
