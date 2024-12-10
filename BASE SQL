@@ -1,0 +1,17 @@
+CREATE DATABASE proyecto_ecg;
+
+USE proyecto_ecg;
+
+CREATE TABLE resultados_ecg (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cantidad_picos INT NOT NULL,
+    senal_original JSON NOT NULL,
+    senal_filtrada JSON NOT NULL,
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE resultados_ecg (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    cantidad_picos INT NOT NULL,
+    senal_original JSON NOT NULL,
+    senal_filtrada JSON NOT NULL
+);
