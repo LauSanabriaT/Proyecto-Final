@@ -1,0 +1,114 @@
+from PyQt5.QtWidgets import  QMainWindow, QPushButton, QVBoxLayout, QWidget, QLabel, QLineEdit, QMessageBox,QDialog 
+import matplotlib.pyplot as plt
+from PyQt5.QtCore import Qt 
+from controlador import ControladorECG
+
+class VentanaLogin(QMainWindow):
+    def _init_(self, gestor):
+        super()._init_()
+        self.gestor = gestor
+        self.setWindowTitle("Iniciar Sesión")
+        self.setGeometry(100, 100, 400, 300)
+
+        # Layout principal
+        layout = QVBoxLayout()
+
+        self.label_usuario = QLabel("Usuario:")
+        self.input_usuario = QLineEdit()
+        layout.addWidget(self.label_usuario)
+        layout.addWidget(self.input_usuario)
+
+        self.label_contraseña = QLabel("Contraseña:")
+        self.input_contraseña = QLineEdit()
+        self.input_contraseña.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.label_contraseña)
+        layout.addWidget(self.input_contraseña)
+
+        boton_login = QPushButton("Iniciar Sesión")
+        boton_login.clicked.connect(self.verificar_credenciales)
+        layout.addWidget(boton_login)
+
+        boton_volver = QPushButton("Volver")
+        boton_volver.clicked.connect(self.gestor.mostrar_bienvenida)
+        layout.addWidget(boton_volver)
+
+        # Configuración de layout
+        contenedor = QWidget()
+        contenedor.setLayout(layout)
+        self.setCentralWidget(contenedor)
+
+    def verificar_credenciales(self):
+        usuario = self.input_usuario.text()
+        contraseña = self.input_contraseña.text()
+        if self.gestor.controlador.verificar_usuario(usuario, contraseña):
+            QMessageBox.information(self, "Éxito", "Inicio de sesión exitoso")
+            self.gestor.mostrar_anomalias()
+        else:
+            QMessageBox.warning(self, "Error", "Usuario o contraseña incorrectos")
+
+class VentanaBienvenida(QMainWindow):
+    def _init_(self, gestor):
+        super()._init_()
+        self.gestor = gestor  # Recibe el gestor como argumento
+        self.setWindowTitle("Bienvenido")
+        self.setGeometry(100, 100, 400, 300)
+
+        # Layout principal
+        layout = QVBoxLayout()
+
+        # Widgets
+        label = QLabel("Bienvenido al programa de detección de anomalías en señales ECG!!!")
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+
+        boton_registrar = QPushButton("Registrar Usuario")
+        boton_registrar.clicked.connect(self.gestor.mostrar_registro)
+        layout.addWidget(boton_registrar)
+
+        boton_login = QPushButton("Iniciar Sesión")
+        boton_login.clicked.connect(self.gestor.mostrar_login)
+        layout.addWidget(boton_login)
+
+        # Configuración de layout
+        contenedor = QWidget()
+        contenedor.setLayout(layout)
+        self.setCentralWidget(contenedor)
+            
+
+
+class VentanaRegistro(QMainWindow):
+    def _init_(self,gestor):
+        super()._init_()
+        self.controlador= ControladorECG()
+        self.gestor = gestor
+        self.setWindowTitle("Registrar Usuario")
+        self.setGeometry(100, 100, 400, 300)
+
+        # Layout principal
+        layout = QVBoxLayout()
+
+        label = QLabel("Ingrese los datos del nuevo usuario:")
+        label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(label)
+
+        self.input_usuario = QLineEdit()
+        self.input_usuario.setPlaceholderText("Usuario")
+        layout.addWidget(self.input_usuario)
+
+        self.input_contraseña = QLineEdit()
+        self.input_contraseña.setPlaceholderText("Contraseña")
+        self.input_contraseña.setEchoMode(QLineEdit.Password)
+        layout.addWidget(self.input_contraseña)
+
+        boton_registrar = QPushButton("Registrar")
+        boton_registrar.clicked.connect(self.controlador.registrar_usuario)
+        layout.addWidget(boton_registrar)
+
+        boton_volver = QPushButton("Volver")
+        boton_volver.clicked.connect(self.gestor.mostrar_bienvenida)
+        layout.addWidget(boton_volver)
+
+        # Configuración de layout
+        contenedor = QWidget()
+        contenedor.setLayout(layout)
+        self.setCentralWidget(contenedor)
