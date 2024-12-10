@@ -1,0 +1,189 @@
+import numpy as np
+import pandas as pd
+from modelo import ModeloECG
+from PyQt5.QtWidgets import QFileDialog
+
+class ControladorECG:
+    def __init__(self):
+        print("Inicializando ControladorECG")
+        self.modelo = ModeloECG()
+      #  self.vista = vista
+
+    def simular_senal(self, duracion=2, frecuencia_muestreo=100):
+        """Simula una señal ECG con ruido."""
+        t = np.linspace(0, duracion, int(duracion * frecuencia_muestreo))
+        senal = np.sin(2 * np.pi * 1.33 * t) + 0.5 * np.random.normal(size=len(t))
+        return pd.DataFrame({"Tiempo": t, "Amplitud": senal})
+    
+    def procesar_senal(self, df_senal):
+        return self.modelo.procesar_senal(df_senal)
+
+    def guardar_resultados(self, cantidad_picos, df_senal):
+        df_original = df_senal[["Tiempo", "Amplitud"]]
+        df_filtrada = df_senal[["Tiempo", "Filtrada"]]
+        self.modelo.guardar_datos(cantidad_picos, df_original, df_filtrada)
+
+    def verificar_usuario(self, usuario, contraseña):
+        return self.modelo.verificar_usuario(usuario, contraseña)
+    
+    def registrar_usuario(self, usuario, contraseña):
+        self.modelo.registrar_usuario(usuario, contraseña)
+
+    def graficar_datos(self):
+    #    try:
+        self.modelo.graficar_datos("Tiempo", "Señal ECG")
+     #   except ValueError as e:
+      #      self.vista.mostrar_mensaje(f"Error: {e}")
+
+    def analizar_senal(self, registro_id, senal):
+        senal_filtrada, picos = self.modelo.procesar_senal(senal)
+        intervalos_rr = np.diff(picos)
+        anomalías = []
+        
+        # Detectar anomalías
+        anomalías.append(self.modelo.detectar_arritmia(intervalos_rr))
+        anomalías.append(self.modelo.detectar_extrasistoles(intervalos_rr))
+        anomalías.append(self.modelo.detectar_isquemia(senal_filtrada))
+        
+        # Guardar anomalías en la base de datos
+        self.modelo.guardar_anomalias(registro_id, ", ".join(anomalías))
+        return anomalías, senal_filtrada, picos
+    
+  
+    def detectar_isquemia(self):
+        """
+        Controla el proceso de detección de isquemia.
+        """
+        try:
+            if self.modelo.data is not None:
+                # Asegúrate de que estás pasando los datos correctos al método de detección
+                resultado = self.modelo.detectar_isquemia(self.modelo.data)
+                return resultado
+            else:
+                # Si no hay datos, retorna un mensaje de error
+                return "No hay señal cargada para detectar isquemia"
+        except Exception as e:
+            return f"Error al detectar isquemia: {str(e)}"
+
+    def detectar_arritmia(self):
+        """
+        Controla el proceso de detección de arritmia.
+        """
+        try:
+            if self.modelo.data is not None:
+                # Procesa la señal para obtener los intervalos RR
+                _, picos = self.modelo.procesar_senal(self.modelo.data)
+                intervalos_rr = np.diff(picos['Tiempo'].values)
+                
+                # Llama al método de detección de arritmia en el modelo
+                resultado = self.modelo.detectar_arritmia(intervalos_rr)
+                return resultado
+            else:
+                return "No hay señal cargada para detectar arritmia"
+        except Exception as e:
+            return f"Error al detectar arritmia: {str(e)}"
+    
+    def detectar_extrasistoles(self):
+        """
+        Controla el proceso de detección de extrasístoles.
+        """
+        try:
+            if self.modelo.data is not None:
+                # Procesa la señal para obtener los intervalos RR
+                _, picos = self.modelo.procesar_senal(self.modelo.data)
+                intervalos_rr = np.diff(picos['Tiempo'].values)
+                
+                # Llama al método de detección de extrasístoles en el modelo
+                resultado = self.modelo.detectar_extrasistoles(intervalos_rr)
+                return resultado
+            else:
+                return "No hay señal cargada para detectar extrasístoles"
+        except Exception as e:
+            return f"Error al detectar extrasístoles: {str(e)}"
+
+    def cargar_archivo_csv(self):
+        """
+        Abre un cuadro de diálogo para seleccionar un archivo CSV y lo carga en el modelo.
+        """
+        try:
+            print("Entrando en cargar_archivo_csv")
+            file_path, _ = QFileDialog.getOpenFileName(None, "Seleccionar archivo CSV", "", "Archivos CSV (*.csv)")
+            if file_path:
+                print(f"Ruta del archivo seleccionada: {file_path}")
+                datos_csv = self.modelo.cargar_datos_csv(file_path)  # Cargar los datos
+                
+                if datos_csv is not None:
+                    # Verificar las columnas del DataFrame
+                    if 'Tiempo' not in datos_csv.columns or 'Amplitud' not in datos_csv.columns:
+                        print("El archivo CSV debe tener columnas 'Tiempo' y 'Amplitud'")
+                        return
+                    
+                    # Procesar la señal cargada
+                    df_senal = datos_csv.copy()  # Crear una copia para no modificar el original
+                    df_senal, cantidad_picos, df_picos = self.modelo.procesar_senal(df_senal)
+                    
+                    # Detectar anomalías
+                    try:
+                        # Preparar intervalos RR para detección de arritmias y extrasístoles
+                        intervalos_rr = np.diff(df_picos['Tiempo'].values)
+                        
+                        anomalias_arritmia = self.modelo.detectar_arritmia(intervalos_rr)
+                        anomalias_extrasistoles = self.modelo.detectar_extrasistoles(intervalos_rr)
+                        anomalias_isquemia = self.modelo.detectar_isquemia(df_senal)
+                        
+                        # Mostrar resultados (puedes ajustar esto según tu interfaz)
+                        print("Anomalías detectadas:")
+                        print("Arritmia:", anomalias_arritmia)
+                        print("Extrasístoles:", anomalias_extrasistoles)
+                        print("Isquemia:", anomalias_isquemia)
+                        
+                        # Si tienes una interfaz gráfica, podrías mostrar estos resultados
+                        # Por ejemplo, en una QMessageBox o en labels de la interfaz
+                    except Exception as e:
+                        print(f"Error al detectar anomalías: {e}")
+                    
+                    # Opcional: graficar la señal
+                    self.graficar_senal(df_senal)
+                else:
+                    print("No se pudieron cargar los datos del archivo CSV.")
+            else:
+                print("No se seleccionó ningún archivo.")
+        except Exception as e:
+            print(f"Error en cargar_archivo_csv: {e}")
+      
+
+   # def graficar_datos_csv(self):
+   #     try:
+   #         self.modelo.graficar_datos_csv("Tiempo", "Señal ECG")
+   #     except ValueError as e:
+   #         self.vista.mostrar_mensaje(f"Error: {e}")
+
+    def guardar_csv(self):
+        """
+        Método del controlador que coordina el guardado de datos
+        entre la vista y el modelo
+        """
+        try:
+            # Configura los parámetros de conexión
+            config_db = {
+                "host": "localhost",
+                "user": "informatica2",
+                "password": "abcd1234",
+                "database": "proyecto_ecg"
+            }
+            
+            # Llama al método del modelo con los parámetros de conexión
+            self.modelo.guardar_csv(**config_db)
+            
+            # Si todo sale bien, muestra mensaje de éxito
+            self.vista.mostrar_mensaje("Datos guardados exitosamente en la base de datos.")
+            
+        except ValueError as e:
+            self.vista.mostrar_mensaje(f"Error: {e}")
+        except Exception as e:
+            self.vista.mostrar_mensaje(f"Error inesperado: {e}")
+
+
+
+    def cerrar(self):
+        self.modelo.cerrar_conexion()
