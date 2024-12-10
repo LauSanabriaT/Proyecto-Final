@@ -1,0 +1,258 @@
+import mysql.connector
+import pandas as pd
+import numpy as np
+from scipy.signal import butter, filtfilt, find_peaks
+import matplotlib.pyplot as plt
+import pymysql
+
+class ModeloECG:
+    def __init__(self, host="localhost", user="informatica2", password="abcd1234", database="proyecto_ecg"):
+        self.conexion = mysql.connector.connect(
+            host=host,
+            user=user,
+            password=password,
+            database=database
+        )
+        self.cursor = self.conexion.cursor()
+        self.data=None
+
+    def procesar_senal(self, df_senal, frecuencia_muestreo=500):
+        b, a = butter(3, 0.1, btype='low', analog=False)
+        filtrada = filtfilt(b, a, df_senal["Amplitud"].values)
+        picos, _ = find_peaks(filtrada, distance=frecuencia_muestreo // 2)
+
+        # Agregamos columna filtrada
+        df_senal["Filtrada"] = filtrada
+        df_picos = df_senal.iloc[picos]
+
+        return df_senal, len(picos), df_picos
+
+    def detectar_arritmia(self, intervalos_rr):
+        """Detecta arritmias basándose en los intervalos RR."""
+        try:
+            # Convierte los intervalos a milisegundos para un análisis más preciso
+            intervalos_ms = intervalos_rr * 1000  # Asumiendo que los intervalos están en segundos
+            
+            # Calcula la variabilidad de los intervalos RR
+            variabilidad = np.std(intervalos_ms)
+            
+            # Calcula la frecuencia cardíaca media
+            frecuencia_cardiaca = 60 / np.mean(intervalos_rr)
+            
+            # Criterios de detección de arritmia
+            if variabilidad > 150 or not (60 <= frecuencia_cardiaca <= 100):
+                return {
+                    "estado": "Arritmia detectada",
+                    "variabilidad_rr": variabilidad,
+                    "frecuencia_cardiaca": frecuencia_cardiaca
+                }
+            return {
+                "estado": "Sin arritmia",
+                "variabilidad_rr": variabilidad,
+                "frecuencia_cardiaca": frecuencia_cardiaca
+            }
+        except Exception as e:
+            return {"estado": f"Error en detección de arritmia: {str(e)}"}
+    
+    def detectar_extrasistoles(self, intervalos_rr):
+        """Detecta extrasístoles basándose en intervalos RR."""
+        try:
+            # Convierte los intervalos a milisegundos
+            intervalos_ms = intervalos_rr * 1000
+            
+            # Calcula el intervalo RR medio
+            media_intervalos = np.mean(intervalos_ms)
+            
+            # Encuentra extrasístoles (intervalos significativamente más cortos)
+            extrasistoles = [i for i in intervalos_ms if i < 0.6 * media_intervalos]
+            
+            return {
+                "estado": "Extrasístoles detectadas" if extrasistoles else "Sin extrasístoles",
+                "cantidad_extrasistoles": len(extrasistoles),
+                "intervalos_extrasistoles": extrasistoles
+            }
+        except Exception as e:
+            return {"estado": f"Error en detección de extrasístoles: {str(e)}"}
+
+    def detectar_isquemia(self, senal):
+        """
+        Detecta isquemia según desviaciones de la línea base.
+        
+        Args:
+        senal (pandas.DataFrame or numpy.array): Señal ECG a analizar
+        
+        Returns:
+        dict: Resultado del análisis de isquemia
+        """
+        try:
+            # Asegurarse de que la señal sea un array numpy
+            if isinstance(senal, pd.DataFrame):
+                senal = senal["Amplitud"].values
+            
+            # Calcular la línea base
+            linea_base = np.mean(senal)
+            
+            # Definir umbrales de desviación
+            umbral_desviacion = 0.2  # 20% de desviación
+            
+            # Detectar segmentos con desviaciones significativas
+            desviaciones_positivas = senal[senal > (linea_base * (1 + umbral_desviacion))]
+            desviaciones_negativas = senal[senal < (linea_base * (1 - umbral_desviacion))]
+            
+            return {
+                "estado": "Isquemia detectada" if len(desviaciones_positivas) > 0 or len(desviaciones_negativas) > 0 else "Sin isquemia",
+                "desviaciones_positivas": len(desviaciones_positivas),
+                "desviaciones_negativas": len(desviaciones_negativas),
+                "linea_base": linea_base
+            }
+        except Exception as e:
+            return {"estado": f"Error en detección de isquemia: {str(e)}"}
+
+   # def detectar_arritmia(self, intervalos_rr):
+   #     """Detecta arritmias basándose en los intervalos RR."""
+   #     if np.std(intervalos_rr) > 0.15 or not (60 <= np.mean(intervalos_rr) <= 100):
+   #         return "Arritmia detectada"
+   #     return "Sin arritmia"
+   # 
+   # def detectar_extrasistoles(self, intervalos_rr):
+   #     """Detecta extrasístoles basándose en intervalos RR."""
+   #     extrasistoles = [i for i in intervalos_rr if i < 0.6 * np.mean(intervalos_rr)]
+   #     return f"{len(extrasistoles)} extrasístoles detectadas" if extrasistoles else "Sin extrasístoles"
+#
+   # def detectar_isquemia(self, senal_filtrada):
+   #     """Detecta isquemia según desviaciones de la línea base."""
+   #     linea_base = np.mean(senal_filtrada)
+   #     if any(x > linea_base + 0.2 for x in senal_filtrada) or any(x < linea_base - 0.2 for x in senal_filtrada):
+   #         return "Isquemia detectada"
+   #     return "Sin isquemia"
+
+    def guardar_anomalias(self, registro_id, anomalías):
+        sql = "INSERT INTO Resultados anomalias (registro_id, anomalies) VALUES (%s, %s)"
+        self.cursor.execute(sql, (registro_id, anomalías))
+        self.conexion.commit()
+
+    def registrar_usuario(self, usuario, contraseña):
+        sql = "INSERT INTO usuarios (usuario, contraseña) VALUES (%s, %s)"
+        self.cursor.execute(sql, (usuario, contraseña))
+        self.conexion.commit()
+        
+    def verificar_usuario(self, usuario, contraseña):
+        sql = "SELECT * FROM usuarios WHERE usuario = %s AND contraseña = %s"
+        self.cursor.execute(sql, (usuario, contraseña))
+        return self.cursor.fetchone() is not None
+
+    def guardar_datos(self, cantidad_picos, df_original, df_filtrada):
+        # Convertimos los DataFrames en JSON
+        json_original = df_original.to_json(orient="records")
+        json_filtrada = df_filtrada.to_json(orient="records")
+
+        # Insertamos los datos en la base de datos
+        sql = """
+        INSERT INTO Resultados (cantidad_picos, senal_original, senal_filtrada)
+        VALUES (%s, %s, %s)
+        """
+        self.cursor.execute(sql, (cantidad_picos, json_original, json_filtrada))
+        self.conexion.commit()
+        print(f"Datos guardados correctamente con ID: {self.cursor.lastrowid}")
+
+    def cargar_datos(self, registro_id):
+        # Consulta para recuperar un registro
+        sql = "SELECT cantidad_picos, senal_original, senal_filtrada FROM Resultados WHERE id = %s"
+        self.cursor.execute(sql, (registro_id,))
+        resultado = self.cursor.fetchone()
+
+        if resultado:
+            cantidad_picos, json_original, json_filtrada = resultado
+
+            # Convertimos JSON a DataFrame
+            df_original = pd.read_json(json_original, orient="records")
+            df_filtrada = pd.read_json(json_filtrada, orient="records")
+
+            return cantidad_picos, df_original, df_filtrada
+        else:
+            print(f"No se encontró ningún registro con ID {registro_id}")
+            return None
+
+    def cargar_datos_csv(self, file_path):
+        """
+        Carga un archivo CSV desde la ruta proporcionada.
+        """
+        try:
+            if not file_path:
+                raise ValueError("La ruta del archivo no puede estar vacía.")
+            
+            self.data = pd.read_csv(file_path)  # Cargar los datos
+            print(f"Archivo cargado exitosamente desde: {file_path}")
+            print(f"Datos cargados: {self.data.head()}")  # Muestra los primeros datos como verificación
+            
+            # Llamar a la detección de anomalías con los datos cargados
+            return self.data  # Devolver los datos para que el controlador pueda usarlos
+        except FileNotFoundError:
+            print("Archivo no encontrado. Verifica la ruta del archivo.")
+            return None
+        except pd.errors.ParserError:
+            print("Error al analizar el archivo CSV. Asegúrate de que tiene el formato correcto.")
+            return None
+        except Exception as e:
+            print(f"Error inesperado al cargar el archivo: {e}")
+            return None
+
+    def graficar_datos_csv(self, columna_x, columna_y):
+        """
+        Grafica dos columnas específicas del archivo CSV cargado.
+        """
+        if self.data is None:
+            raise ValueError("No se ha cargado ningún archivo CSV.")
+        
+        if columna_x not in self.data.columns or columna_y not in self.data.columns:
+            raise ValueError(f"Una o ambas columnas no existen en el archivo: {columna_x}, {columna_y}")
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(self.data[columna_x], self.data[columna_y], label=f"{columna_x} vs {columna_y}")
+        plt.xlabel(columna_x)
+        plt.ylabel(columna_y)
+        plt.title(f"Gráfico de '{columna_x}' vs '{columna_y}'")
+        plt.legend()
+        plt.grid(True)
+        plt.show()
+
+    def guardar_csv(self, host, user, password, database):
+        """
+        Guarda los datos cargados en una tabla MySQL.
+        """
+        if self.data is None:
+            raise ValueError("No hay datos cargados para guardar.")
+        
+        try:
+            conexion = pymysql.connect(
+                host=host,
+                user=user, 
+                password=password,
+                database=database
+            )
+            
+            cursor = conexion.cursor()
+            
+            for _, fila in self.data.iterrows():
+                sql = "INSERT INTO Resultados_CSV (Tiempo, Señal) VALUES (%s, %s)"
+                cursor.execute(sql, (fila['Tiempo'], fila['Señal ECG']))
+            
+            conexion.commit()
+            conexion.close()
+            
+        except Exception as e:
+            raise Exception(f"Error al guardar los datos: {e}")
+
+
+    def cerrar_conexion(self):
+        self.cursor.close()
+        self.conexion.close()
+    
+
+if __name__ == "__main__":
+    try:
+        modelo = ModeloECG()
+        print("Conexión exitosa a la base de datos.")
+    except Exception as e:
+        print(f"Error al conectar a la base de datos: {e}")
+
